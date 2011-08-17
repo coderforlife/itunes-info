@@ -154,6 +154,7 @@ namespace iTunesInfo
         #endregion
 
         #region Prop Objects
+        /// <summary>A basic property. It gets the current value of a named property in a particular context</summary>
         private class Prop
         {
             /// <summary>The contexts used by this property</summary>
@@ -161,7 +162,15 @@ namespace iTunesInfo
             /// <summary>The properties of the contexts used by this property</summary>
             protected PropertyInfo[] propInfos;
 
+            /// <summary>Get the PropertyInfo reflection object for a context and property name</summary>
+            /// <param name="c">The context</param>
+            /// <param name="p">The property name</param>
+            /// <returns>The PropertyInfo object</returns>
             protected static PropertyInfo GetPropInfo(Context c, string p) { return propCntxtTypes[(int)c].GetProperty(p); }
+            /// <summary>Get the raw value of a property in a particular context</summary>
+            /// <param name="c">The context</param>
+            /// <param name="p">The PropertyInfo reflection object</param>
+            /// <returns>The raw value or null if it isn't available</returns>
             protected static object GetRawValue(Context c, PropertyInfo p)
             {
                 object o = propCntxtObjs[(int)c];
@@ -170,7 +179,12 @@ namespace iTunesInfo
                 return null;
             }
 
+            /// <summary>Gets the raw value object of a particular contexts / property-info</summary>
+            /// <param name="i">The index in the cntxts / propInfos array</param>
+            /// <returns>The raw value or null if it isn't available</returns>
             protected object GetRawValue(int i) { return GetRawValue(this.cntxts[i], this.propInfos[i]); }
+            /// <summary>Gets the raw value object, searching through the contexts / property-infos until one is actually available</summary>
+            /// <returns>The raw value or null if it isn't available</returns>
             protected object GetRawValue()
             {
                 for (int i = 0; i < this.cntxts.Length; ++i)
@@ -182,14 +196,21 @@ namespace iTunesInfo
                 return null;
             }
 
-            protected Prop() {} // subclass needs to implement its own from scratch
+            /// <summary>A blank constructor for use by subclasses to start from scratch</summary>
+            protected Prop() { }
 
+            /// <summary>Create a property for a named property of the given context</summary>
+            /// <param name="cntxt">The context of the property</param>
+            /// <param name="prop">The name of the property</param>
             public Prop(Context cntxt, string prop)
             {
                 this.cntxts = new Context[1]{ cntxt };
                 this.propInfos = new PropertyInfo[1] { GetPropInfo(cntxt, prop) };
             }
 
+            /// <summary>Create a property for a named property of the given contexts; using the first available context</summary>
+            /// <param name="cntxts">The contexts of the property; the first available is used</param>
+            /// <param name="prop">The name of the property</param>
             public Prop(Context[] cntxts, string prop)
             {
                 this.cntxts = cntxts;
@@ -198,8 +219,13 @@ namespace iTunesInfo
                     this.propInfos[i] = GetPropInfo(cntxts[i], prop);
             }
 
+            /// <summary>Gets if the current value of the property is available. The base class returns true if the value is not null.</summary>
             public virtual bool Available { get { return GetRawValue() != null; } }
+            /// <summary>Gets if the current value of the property represents true. The base class returns true if the string value is not null and not empty.</summary>
             public virtual bool IsTrue { get { object val = GetRawValue(); return val != null && !string.IsNullOrEmpty(val.ToString()); } }
+            /// <summary>Get the current value of the property as a string</summary>
+            /// <param name="format">The format of the string returned, is specific to the type of property. This base class ignores the format.</param>
+            /// <returns>The value as a string</returns>
             public virtual string GetValue(string format)
             {
                 object val = GetRawValue();
@@ -207,17 +233,29 @@ namespace iTunesInfo
                 return string.IsNullOrEmpty(str) ? "\0" : str;
             }
         }
+        /// <summary>A boolean property</summary>
         private class BooleanProp : Prop
         {
             public BooleanProp(Context cntxt, string prop) : base(cntxt, prop) { }
             public BooleanProp(Context[] cntxts, string prop) : base(cntxts, prop) { }
+
+            /// <summary>Get true if the property is available and the value of the boolean is true</summary>
             public override bool IsTrue { get { object val = GetRawValue(); return val != null && (bool)val; } }
         }
+        /// <summary>A property for IFormattable values (DateTime, Integer, Double)</summary>
         private abstract class DirectFormattableProp : Prop
         {
             public DirectFormattableProp(Context cntxt, string prop) : base(cntxt, prop) { }
             public DirectFormattableProp(Context[] cntxts, string prop) : base(cntxts, prop) { }
+
+            /// <summary>Convert to a string using a default format</summary>
+            /// <param name="f">The value to convert</param>
+            /// <returns>The result of the conversion</returns>
             public virtual string FallbackToString(IFormattable f) { return f.ToString(); }
+
+            /// <summary>Get the current value of the property as a string</summary>
+            /// <param name="format">The format of the string returned, passed to the IFormattable.ToString()</param>
+            /// <returns>The value of the property as a string</returns>
             public override string GetValue(string format)
             {
                 object val = GetRawValue();
@@ -232,96 +270,138 @@ namespace iTunesInfo
                 return "\0";
             }
         }
+        /// <summary>A property for date values</summary>
         private class DateProp : DirectFormattableProp
         {
             public DateProp(Context cntxt, string prop) : base(cntxt, prop) { }
             public DateProp(Context[] cntxts, string prop) : base(cntxts, prop) { }
+
+            /// <summary>Convert to a string using the general date format "g"</summary>
+            /// <param name="f">The value to convert</param>
+            /// <returns>The result of the conversion</returns>
             public override string FallbackToString(IFormattable f) { return f.ToString("g", null); }
         }
+        /// <summary>A property for time values, which are represented as integer seconds</summary>
         private class TimeProp : Prop
         {
             public TimeProp(Context cntxt, string prop) : base(cntxt, prop) { }
             public TimeProp(Context[] cntxts, string prop) : base(cntxts, prop) { }
+
+            /// <summary>Get the current value of the property as a string</summary>
+            /// <param name="format">The format of the string returned, passed to DateTime.ToString()</param>
+            /// <returns>The value of the property as a string</returns>
             public override string GetValue(string format)
             {
                 object val = GetRawValue();
                 if (val != null)
                 {
+                    // Get the number of seconds
                     int secs = (int)val;
-                    // Does not work before .NET 4
-                    //if (!string.IsNullOrEmpty(format))
-                    //{
-                    //    TimeSpan ts = new TimeSpan(0, 0, secs);
-                    //    try { return ts.ToString(format); }
-                    //    catch { }
-                    //}
                     if (!string.IsNullOrEmpty(format))
                     {
-                        DateTime dt = new DateTime(0, 0, 0, 0, 0, secs);
-                        try { return dt.ToString(format); }
+                        // Format the time
+                        //TimeSpan x = new TimeSpan(0, 0, secs); // Does not work before .NET 4, but would be preferred
+                        DateTime x = new DateTime(0, 0, 0, 0, 0, secs);
+                        try { return x.ToString(format); }
                         catch { }
                     }
-                    return secs.ToString();
+                    return secs.ToString(); // just give the text
                 }
                 return "\0";
             }
         }
+        /// <summary>A property for integer values</summary>
         private class IntegerProp : DirectFormattableProp
         {
             public IntegerProp(Context cntxt, string prop) : base(cntxt, prop) { }
             public IntegerProp(Context[] cntxts, string prop) : base(cntxts, prop) { }
         }
+        /// <summary>A property for decimal values</summary>
         private class DoubleProp : DirectFormattableProp
         {
             public DoubleProp(Context cntxt, string prop) : base(cntxt, prop) { }
             public DoubleProp(Context[] cntxts, string prop) : base(cntxts, prop) { }
+
+            /// <summary>Convert to a string using with optional decimal places</summary>
+            /// <param name="f">The value to convert</param>
+            /// <returns>The result of the conversion</returns>
             public override string FallbackToString(IFormattable f) { return f.ToString("0.#", null); }
         }
+        /// <summary>A property for enumeration values</summary>
         private class EnumProp : Prop
         {
+            /// <summary>The names for the enumeration values, in numerical order starting from 0</summary>
             private string[] names;
+
+            /// <summary>Create a property for a named property of the given context, with a set of names for the enumeration values</summary>
+            /// <param name="cntxt">The context of the property</param>
+            /// <param name="prop">The name of the property</param>
+            /// <param name="names">The names for the enumeration values, in numerical order starting from 0</param>
             public EnumProp(Context cntxt, string prop, string[] names) : base(cntxt, prop) { this.names = names; }
+
+            /// <summary>Create a property for a named property of the given contexts; using the first available context, with a set of names for the enumeration values</summary>
+            /// <param name="cntxts">The contexts of the property; the first available is used</param>
+            /// <param name="prop">The name of the property</param>
+            /// <param name="names">The names for the enumeration values, in numerical order starting from 0</param>
             public EnumProp(Context[] cntxts, string prop, string[] names) : base(cntxts, prop) { this.names = names; }
+
+            /// <summary>Get the current value of the property as a string</summary>
+            /// <param name="format">The format of the string returned, which is not used</param>
+            /// <returns>The value of the property as a string</returns>
             public override string GetValue(string format)
             {
                 object val = GetRawValue();
                 if (val != null)
                 {
-                    int x = Convert.ToInt32(val);
+                    int x = Convert.ToInt32(val); // convert the value to an integer
                     if (x >= 0 && x < this.names.Length)
                         return this.names[x];
                 }
                 return "\0";
             }
         }
+        /// <summary>A property for rating types, which are given as an integer from 0 to 100</summary>
         private class RatingProp : Prop
         {
             public RatingProp(Context cntxt, string prop) : base(cntxt, prop) { }
             public RatingProp(Context[] cntxts, string prop) : base(cntxts, prop) { }
+
+            /// <summary>Gets if the current value of the property represents true. Returns true if available and not equal to 0.</summary>
             public override bool IsTrue { get { object val = GetRawValue(); return val != null && ((int)val > 0); } }
+
+            /// <summary>Get the current value of the property as a special string</summary>
+            /// <param name="format">The format of the string returned, which is not used</param>
+            /// <returns>A special string describing the image</returns>
             public override string GetValue(string format)
             {
                 object val = GetRawValue();
                 if (val != null)
                 {
-                    int rating = Convert.ToInt32(val);
+                    int rating = Convert.ToInt32(val); // the integer rating value, from 0 to 100
                     if (rating > 0) // TODO: have a format that allows rating=0 to still show up and different pictures?
                         return content.AddImage(Rating.Create(rating));
                 }
                 return "\0";
             }
         }
+        /// <summary>Properties for file sizes, allowing the formats: b (default), k, m, g, or * (picks an appropriate unit and appends the unit)</summary>
         private abstract class SizeProp : Prop
         {
-            // formats: b (default), k, m, g, or * (picks an appropriate unit and appends the unit)
-            // only 1 character is allowed
-
+            /// <summary>The number of bytes in a kilobyte</summary>
             public const int KB = 1024;
+            /// <summary>The number of bytes in a megabyte</summary>
             public const int MB = 1024 * 1024;
+            /// <summary>The number of bytes in a gigabyte</summary>
             public const int GB = 1024 * 1024 * 1024;
+
             public SizeProp() : base() { }
             public SizeProp(Context cntxt, string prop) : base(cntxt, prop) { }
             public SizeProp(Context[] cntxts, string prop) : base(cntxts, prop) { }
+
+            /// <summary>Used to format the size</summary>
+            /// <param name="size">The size in bytes</param>
+            /// <param name="format">The format to use: b (default), k, m, g, or *</param>
+            /// <returns>The formatted value</returns>
             public static string FormatSize(double size, string format)
             {
                 char f = format.Length == 1 ? format[0] : '\0';
@@ -341,80 +421,119 @@ namespace iTunesInfo
                 }
             }
         }
+        /// <summary>A property for track file sizes, that are stored using a single integer or 2 integers</summary>
         private class TrackSizeProp : SizeProp
         {
+            /// <summary>A property that displays the size of a track</summary>
             public TrackSizeProp() : base()
             {
+                // The size properties that can be used
                 this.cntxts = new Context[3] { Context.Track, Context.FileOrCDTrack, Context.FileOrCDTrack };
                 this.propInfos = new PropertyInfo[3] { GetPropInfo(this.cntxts[0], "Size"), GetPropInfo(this.cntxts[1], "Size64High"), GetPropInfo(this.cntxts[2], "Size64Low") };
             }
+            /// <summary>The internal function for getting the value</summary>
+            /// <returns>The file size, or UInt64.MaxValue if it isn't available</returns>
             private ulong GetValue() {
+                // Try to get the combined value from Size64High and Size64Low
                 object valH = GetRawValue(1), valL = GetRawValue(2);
                 if (valH != null && valL != null)
                 {
                     int high = Convert.ToInt32(valH), low = Convert.ToInt32(valL);
                     return (((ulong)high) << 32) + (ulong)low;
                 }
+                // Now try to use just Size
                 object val = GetRawValue(0);
                 if (val != null)
                     return (ulong)Convert.ToInt32(val);
-                return UInt64.MaxValue;
+                return UInt64.MaxValue; // Failed
             }
+            /// <summary>This property is available if either the Size or both the Size64High and Size64Low values are available</summary>
             public override bool Available  { get { return GetRawValue(0) != null || (GetRawValue(1) != null && GetRawValue(2) != null); } }
+            /// <summary>This property is true if it is available and not 0</summary>
             public override bool IsTrue     { get { ulong val = GetValue(); return val != 0 && val != UInt64.MaxValue; } }
+            /// <summary>Get the current value of the property as a string</summary>
+            /// <param name="format">The format of the string returned, one of: b (default), k, m, g, or * (picks an appropriate unit and appends the unit)</param>
+            /// <returns>The value of the property as a string</returns>
             public override string GetValue(string format)
             {
                 ulong size = this.GetValue();
                 return (size != UInt64.MaxValue) ? FormatSize((double)size, format) : "\0";
             }
         }
+        /// <summary>A property for sizes that uses a double to store the value</summary>
         private class DoubleSizeProp : SizeProp
         {
             public DoubleSizeProp(Context cntxt, string prop) : base(cntxt, prop) { }
             public DoubleSizeProp(Context[] cntxts, string prop) : base(cntxts, prop) { }
+
+            /// <summary>Gets if the current value of the property represents true. Returns true if available and greater than 0.</summary>
             public override bool IsTrue { get { object val = GetRawValue(); return val != null && ((double)val > 0); } }
+            /// <summary>Get the current value of the property as a string</summary>
+            /// <param name="format">The format of the string returned, one of: b (default), k, m, g, or * (picks an appropriate unit and appends the unit)</param>
+            /// <returns>The value of the property as a string</returns>
             public override string GetValue(string format)
             {
                 object val = GetRawValue();
                 return (val != null) ? FormatSize((double)val, format) : "\0";
             }
         }
+        /// <summary>A property for track artwork</summary>
         private class TrackArtworkProp : Prop
         {
+            /// <summary>A property that displays track artwork</summary>
             public TrackArtworkProp() : base() {}
+
+            /// <summary>Gets the artwork to use</summary>
+            /// <returns>The current track's artwork collection</returns>
             private IITArtworkCollection GetArtwork()
             {
                 IITTrack t = propCntxtObjs[(int)Context.Track] as IITTrack;
                 return (t != null) ? t.Artwork : null;
             }
+            /// <summary>This property is available if there is at least one piece of artwork</summary>
             public override bool Available  { get { IITArtworkCollection a = GetArtwork(); return a != null && a.Count > 0; } }
+            /// <summary>This property is true if there is at least one piece of artwork</summary>
             public override bool IsTrue     { get { IITArtworkCollection a = GetArtwork(); return a != null && a.Count > 0; } }
+            /// <summary>Get the current value of the property as a special string</summary>
+            /// <param name="format">The format can be blank or a number greater than 1, and values higher than the total available pieces of artwork just become the last index</param>
+            /// <returns>A special string describing the image</returns>
             public override string GetValue(string format)
             {
                 IITArtworkCollection a = GetArtwork();
                 if (a != null && a.Count > 0)
                 {
+                    // Show at least some artwork
                     int count = a.Count;
                     int idx = 1; // 1-based indexing
-                    if (format.Length > 0 && Int32.TryParse(format, out idx))
+                    if (format.Length > 0 && Int32.TryParse(format, out idx)) // try to use the format
                         idx = idx.Clamp(1, count);
+                    
+                    // Need to save the image then load the image
                     string temp = Path.GetTempFileName();
                     a[idx].SaveArtworkToFile(temp);
                     FileStream fs = new FileStream(temp, FileMode.Open, FileAccess.Read);
                     Bitmap img = new Bitmap(fs);
                     fs.Close();
                     File.Delete(temp);
+
+                    // Add the image to the content
                     return content.AddImage(img);
                 }
                 return "\0";
             }
         }
+        /// <summary>A property for a playback bar</summary>
         private class PlaybackProp : Prop
         {
+            /// <summary>The changing value for playback percentage</summary>
             private class PlaybackValue : ChangingValue
             {
+                /// <summary>The iTunes app</summary>
                 iTunesApp app;
+                /// <summary>Create a new PlaybackValue</summary>
+                /// <param name="app">The iTunes app</param>
                 public PlaybackValue(iTunesApp app) { this.app = app; }
+                /// <summary>Get the current playback percentage, from 0 to 1</summary>
                 protected override double ValueInternal
                 { get {
                     try
@@ -424,7 +543,11 @@ namespace iTunesInfo
                     catch { return -1; }
                 } }
             }
-            public PlaybackProp() : base(Context.App, "PlayerPosition") { }
+            /// <summary>A property that display a playback bar</summary>
+            public PlaybackProp() : base(Context.App, "PlayerPosition") { } // allow base to handle Available and IsTrue by giving it the PlayerPosition property
+            /// <summary>Get the property as a special string so that it will be changing</summary>
+            /// <param name="format">The format of the string returned, which is not used</param>
+            /// <returns>A special string describing the changing value</returns>
             public override string GetValue(string format) { return this.IsTrue ? content.AddValue(new PlaybackValue((iTunesApp)propCntxtObjs[(int)Context.App])) : "\0"; }
         }
         #endregion
