@@ -29,10 +29,10 @@ using System.Xml;
 
 using iTunesLib;
 
-// TODO: Support multiple displays
-
 namespace iTunesInfo
 {
+    /// <summary>The controller is the main program class program. It manages the iTunes object, monitors the events, runs the necessary actions, and works with the displays.</summary>
+    /// <remarks>This is implemented as a form so that it has a complete Windows message loop, the form is never displayed</remarks>
     class Controller : Form
     {
         #region Names
@@ -197,6 +197,9 @@ namespace iTunesInfo
         /// <summary>Create the Name2Action and Action2Name dictionaries</summary>
         private void CreatePossibleActions()
         {
+            Name2Action.Clear();
+            Action2Name.Clear();
+
             Name2Action.Add("play", this.Play);
             Name2Action.Add("pause", this.Pause);
             Name2Action.Add("stop", this.Stop);
@@ -385,6 +388,10 @@ namespace iTunesInfo
         #endregion
 
         #region Settings
+
+        /// <summary>The default display text format, used when no display text format has been set</summary>
+        public const string DefaultDisplayTextFormat = "{TrackName}\n{TrackAlbum}\n{TrackArtist}\n{TrackRating}\n{TrackArtwork}";
+
         /// <summary>The default maximum width</summary>
         public const int    DefaultMaxWidth      = 250;
         /// <summary>The default line spacing</summary>
@@ -426,76 +433,122 @@ namespace iTunesInfo
             { "Font",               DefaultFont             },
         };
 
+        /// <summary>Set a setting for the TrackDisplay</summary>
+        /// <typeparam name="T">The type of the value</typeparam>
+        /// <param name="name">The name of the setting</param>
+        /// <param name="x">The new value</param>
         private void SetSetting<T>(string name, T x) { SetSetting(name, name, x); }
+        /// <summary>Set a setting for the TrackDisplay</summary>
+        /// <typeparam name="T">The type of the value</typeparam>
+        /// <param name="name">The name of the setting in the Settings dictionary</param>
+        /// <param name="prop">The name of the property in TrackDisplay</param>
+        /// <param name="x">The new value</param>
         private void SetSetting<T>(string name, string prop, T x)
         {
             if (!this.settings[name].Equals(x))
             {
                 this.settings[name] = x;
+
+                // Set the properties on the TrackDisplay
                 typeof(TrackDisplay).GetProperty(prop).SetValue(this.dis, x, null);
                 if (this.backup != null)
                     typeof(TrackDisplay).GetProperty(prop).SetValue(this.backup, x, null);
+
+                // Rebuild the form
                 InvalidateForm(this.dis);
             }
         }
-        private void SetBasicSetting<T>(string name, T x) { SetBasicSetting(name, name, x); }
-        private void SetBasicSetting<T>(string name, string prop, T x)
+        /// <summary>Set a setting for the BasicTrackDisplay or GlassTrackDisplay</summary>
+        /// <typeparam name="D">The type of display, either BasicTrackDisplay or GlassTrackDisplay</typeparam>
+        /// <typeparam name="T">The type of the value</typeparam>
+        /// <param name="name">The name of the setting</param>
+        /// <param name="x">The new value</param>
+        private void SetSetting<D, T>(string name, T x) { SetSetting<D, T>(name, name, x); }
+        /// <summary>Set a setting for the BasicTrackDisplay or GlassTrackDisplay</summary>
+        /// <typeparam name="D">The type of display, either BasicTrackDisplay or GlassTrackDisplay</typeparam>
+        /// <typeparam name="T">The type of the value</typeparam>
+        /// <param name="name">The name of the setting in the Settings dictionary</param>
+        /// <param name="prop">The name of the property in BasicTrackDisplay or GlassTrackDisplay</param>
+        /// <param name="x">The new value</param>
+        private void SetSetting<D, T>(string name, string prop, T x)
         {
             if (!this.settings[name].Equals(x))
             {
                 this.settings[name] = x;
-                if (this.dis is BasicTrackDisplay)
+
+                if (this.dis is D)
                 {
-                    typeof(BasicTrackDisplay).GetProperty(prop).SetValue(this.dis, x, null);
+                    // Set the setting on the currently visible display
+                    typeof(D).GetProperty(prop).SetValue(this.dis, x, null);
                     InvalidateForm(this.dis);
                 }
-                else if (this.backup != null && this.backup is BasicTrackDisplay)
-                    typeof(BasicTrackDisplay).GetProperty(prop).SetValue(this.backup, x, null);
-            }
-        }
-        private void SetGlassSetting<T>(string name, T x) { SetGlassSetting(name, name, x); }
-        private void SetGlassSetting<T>(string name, string prop, T x)
-        {
-            if (!this.settings[name].Equals(x))
-            {
-                this.settings[name] = x;
-                if (this.dis is GlassTrackDisplay)
-                {
-                    typeof(GlassTrackDisplay).GetProperty(prop).SetValue(this.dis, x, null);
-                    InvalidateForm(this.dis);
-                }
-                else if (this.backup != null && this.backup is GlassTrackDisplay)
-                    typeof(GlassTrackDisplay).GetProperty(prop).SetValue(this.backup, x, null);
+                else if (this.backup != null && this.backup is D)
+                    // Set the setting on the backup display
+                    typeof(D).GetProperty(prop).SetValue(this.backup, x, null);
             }
         }
 
-        public string DisplayText           { get { return this.displayFormat; }                            set { if (this.displayFormat != value) { this.displayFormat = value; this.UpdateInfo(); } } }
-        public bool AllowGlass              { get { return this.glassAllowed; }                             set { if (this.glassAllowed != value) { this.glassAllowed = value; this.SetDisplay(); } } }
-        public bool MinimizeOnStart         { get { return this.minimizeOnStart; }                          set { this.minimizeOnStart = value; } }
-        public int MaxWidth                 { get { return (int)this.settings["MaxWidth"]; }                set { SetSetting("MaxWidth", value); } }
-        public int LineSpacing              { get { return (int)this.settings["LineSpacing"]; }             set { SetSetting("LineSpacing", value); } }
-        public int InsideMargin             { get { return (int)this.settings["InsideMargin"]; }            set { SetSetting("InsideMargin", value); } }
-        public int OutsideMargin            { get { return (int)this.settings["OutsideMargin"]; }           set { SetSetting("OutsideMargin", value); } }
-        public double MaxOpacity            { get { return (double)this.settings["MaxOpacity"]; }           set { SetSetting("MaxOpacity", value); } }
-        public int FadeTime                 { get { return (int)this.settings["FadeTime"]; }                set { SetSetting("FadeTime", "DefaultFadeTime", value); } }
-        public int VisibleTime              { get { return (int)this.settings["VisibleTime"]; }             set { SetSetting("VisibleTime", value); } }
-        public DesktopPos DesktopPosition   { get { return (DesktopPos)this.settings["DesktopPosition"]; }  set { SetSetting("DesktopPosition", value); } }
-        public Font DisplayFont             { get { return (Font)this.settings["Font"]; }                   set { SetSetting("Font", value); } }
-        public Color TextColor              { get { return (Color)this.settings["TextColor"]; }             set { SetSetting("TextColor", "ForeColor", value); } }
-        public Color BackgroundColor        { get { return (Color)this.settings["BackgroundColor"]; }       set { SetBasicSetting("BackgroundColor", "BackColor", value); } }
-        public int GlowSize                 { get { return (int)this.settings["GlowSize"]; }                set { SetGlassSetting("GlowSize", value); } }
 
+        /// <summary>Get or set the display format</summary>
+        public string DisplayText         { get { return this.displayFormat; }                            set { if (this.displayFormat != value) { this.displayFormat = value; this.UpdateInfo(); } } }
+        /// <summary>Get or set if glass is allowed</summary>
+        public bool AllowGlass            { get { return this.glassAllowed; }                            set { if (this.glassAllowed != value) { this.glassAllowed = value; this.SetActiveDisplay(); } } }
+        /// <summary>Get or set if iTunes will be minimized if it was started due to this program starting</summary>
+        public bool MinimizeOnStart       { get { return this.minimizeOnStart; }                         set { this.minimizeOnStart = value; } }
+        /// <summary>Get or set the maximum width of the display, in pixels</summary>
+        public int MaxWidth               { get { return (int)this.settings["MaxWidth"]; }               set { SetSetting("MaxWidth", value); } }
+        /// <summary>Get or set the line spacing used in the display, in pixels</summary>
+        public int LineSpacing            { get { return (int)this.settings["LineSpacing"]; }            set { SetSetting("LineSpacing", value); } }
+        /// <summary>Get or set the inside margin of the display, in pixels</summary>
+        public int InsideMargin           { get { return (int)this.settings["InsideMargin"]; }           set { SetSetting("InsideMargin", value); } }
+        /// <summary>Get or set the outside margin of the display, in pixels</summary>
+        public int OutsideMargin          { get { return (int)this.settings["OutsideMargin"]; }          set { SetSetting("OutsideMargin", value); } }
+        /// <summary>Get or set the maximum opacity of the display, from 0 to 1</summary>
+        public double MaxOpacity          { get { return (double)this.settings["MaxOpacity"]; }          set { SetSetting("MaxOpacity", value); } }
+        /// <summary>Get or set the fading time of the display,m in milliseconds</summary>
+        public int FadeTime               { get { return (int)this.settings["FadeTime"]; }               set { SetSetting("FadeTime", "DefaultFadeTime", value); } }
+        /// <summary>Get or set the amount of time the display is completely visible for, in milliseconds</summary>
+        public int VisibleTime            { get { return (int)this.settings["VisibleTime"]; }            set { SetSetting("VisibleTime", value); } }
+        /// <summary>Get or set the position on the desktop that the window is used</summary>
+        public DesktopPos DesktopPosition { get { return (DesktopPos)this.settings["DesktopPosition"]; } set { SetSetting("DesktopPosition", value); } }
+        /// <summary>Get or set the font used in the display</summary>
+        public Font DisplayFont           { get { return (Font)this.settings["Font"]; }                  set { SetSetting("Font", value); } }
+        /// <summary>Get or set the text color used in the displays</summary>
+        public Color TextColor            { get { return (Color)this.settings["TextColor"]; }            set { SetSetting("TextColor", "ForeColor", value); } }
+        /// <summary>Get or set the background color of the basic track info displays</summary>
+        public Color BackgroundColor      { get { return (Color)this.settings["BackgroundColor"]; }      set { SetSetting<BasicTrackDisplay, Color>("BackgroundColor", "BackColor", value); } }
+        /// <summary>Get or set the size of the glow effect for glass track info displays, in pixels</summary>
+        public int GlowSize               { get { return (int)this.settings["GlowSize"]; }               set { SetSetting<GlassTrackDisplay, int>("GlowSize", value); } }
+
+
+        /// <summary>A regular expression to remove symbols from a string</summary>
+        private static readonly Regex symbolCleanupRegex = new Regex(@"[\s/\\+_-.]", RegexOptions.ExplicitCapture | RegexOptions.Compiled);
+
+        /// <summary>Convert a string to lower-case and remove many symbols and spaces that are in the string</summary>
+        /// <param name="str">The string to convert</param>
+        /// <returns>The converted string</returns>
         private static string ToLowerAndStripSymbols(string str)
         {
-            return str.Trim().ToLower().Replace(" ", "").Replace("/", "").Replace("\\", "").Replace("+", "").Replace("_", "").Replace("-", "").Replace(".", "");
+            //return str.Trim().Replace(" ", "").Replace("/", "").Replace("\\", "").Replace("+", "").Replace("_", "").Replace("-", "").Replace(".", "").ToLower();
+            return symbolCleanupRegex.Replace(str.Trim(), "").ToLower();
         }
+
+        /// <summary>Get a setting from an XML element into the given variable</summary>
+        /// <param name="settings">The Settings XML element</param>
+        /// <param name="name">The name of the setting</param>
+        /// <param name="val">The variable to save into</param>
+        /// <returns>True if the variable was set, otherwise the variable was left with its default value</returns>
         private static bool GetSetting(XmlElement settings, string name, ref object val)
         {
+            // The node with the value of the setting
             XmlNodeList n = settings.GetElementsByTagName(name);
             if (n != null && n.Count >= 1)
             {
+                // Has a value, get it and the type to use
                 string text = n[0].InnerText;
                 Type T = val.GetType();
+
+                // Get a value from the text
                 if (T == typeof(Color))
                     val = ColorTranslator.FromHtml(text);
                 else if (T == typeof(Font))
@@ -504,59 +557,84 @@ namespace iTunesInfo
                     val = Enum.Parse(T, text);
                 else
                     val = Convert.ChangeType(text, T);
+
                 return true;
             }
             return false;
         }
+        /// <summary>Get a setting from an XML element into the given variable, with a built-in cast</summary>
+        /// <typeparam name="T">The type of the variable</typeparam>
+        /// <param name="settings">The Settings XML element</param>
+        /// <param name="name">The name of the setting</param>
+        /// <param name="val">The variable to save into</param>
         private static void GetSetting<T>(XmlElement settings, string name, ref T val)
         {
             object o = val;
             if (GetSetting(settings, name, ref o))
                 val = (T)o;
         }
+        /// <summary>Get a setting from an XML element into the Settings dictionary</summary>
+        /// <param name="settings">The Settings XML element</param>
+        /// <param name="name">The name of the setting</param>
         private void GetSetting(XmlElement settings, string name)
         {
             object val = this.settings[name];
             if (GetSetting(settings, name, ref val))
                 this.settings[name] = val;
         }
+        /// <summary>Read the settings from the XML file</summary>
+        /// <param name="settings">The Settings XML element</param>
         private void ReadSettings(XmlElement settings)
         {
-            GetSetting(settings,    "AllowGlass",       ref this.glassAllowed   );
-            GetSetting(settings,    "MinimizeOnStart",  ref this.minimizeOnStart);
-            GetSetting(settings,    "MaxWidth"          );
-            GetSetting(settings,    "LineSpacing"       );
-            GetSetting(settings,    "GlowSize"          );
-            GetSetting(settings,    "InsideMargin"      );
-            GetSetting(settings,    "OutsideMargin"     );
-            GetSetting(settings,    "MaxOpacity"        );
-            GetSetting(settings,    "FadeTime"          );
-            GetSetting(settings,    "VisibleTime"       );
-            GetSetting(settings,    "DesktopPosition"   );
-            GetSetting(settings,    "TextColor"         );
-            GetSetting(settings,    "BackgroundColor"   );
-            GetSetting(settings,    "Font"              );
+            GetSetting(settings, "AllowGlass",      ref this.glassAllowed   );
+            GetSetting(settings, "MinimizeOnStart", ref this.minimizeOnStart);
+            GetSetting(settings, "MaxWidth"         );
+            GetSetting(settings, "LineSpacing"      );
+            GetSetting(settings, "GlowSize"         );
+            GetSetting(settings, "InsideMargin"     );
+            GetSetting(settings, "OutsideMargin"    );
+            GetSetting(settings, "MaxOpacity"       );
+            GetSetting(settings, "FadeTime"         );
+            GetSetting(settings, "VisibleTime"      );
+            GetSetting(settings, "DesktopPosition"  );
+            GetSetting(settings, "TextColor"        );
+            GetSetting(settings, "BackgroundColor"  );
+            GetSetting(settings, "Font"             );
         }
+
+        /// <summary>Get the actions from the XML file</summary>
+        /// <param name="evt">The event XML element</param>
+        /// <returns>The list of actions or null if there are no actions</returns>
         private List<ThreadStart> GetActions(XmlElement evt)
         {
             List<ThreadStart> actions = new List<ThreadStart>();
             foreach (XmlElement action in evt.ChildNodes)
             {
+                // Convert the text to an action
                 ThreadStart a;
                 Name2Action.TryGetValue(ToLowerAndStripSymbols(evt.InnerText), out a);
+
+                // Add it to the list
                 if (a != null)
                     actions.Add(a);
             }
             return actions.Count == 0 ? null : actions;
         }
+        /// <summary>Read the events from the XML file</summary>
+        /// <param name="evts">The Events XML element</param>
         private void ReadEvents(XmlElement evts)
         {
             foreach (XmlElement evt in evts.ChildNodes)
             {
+                // Get the actions
                 List<ThreadStart> actions = GetActions(evt);
                 if (actions == null)
                     continue;
+
+                // Get the event key
                 string when = evt.GetAttribute("When");
+
+                // Add the event to the dictionary
                 if (evt.LocalName == "KeyEvent")
                     KeyEvents.Add(Keys.FromString(when), actions);
                 else // Event
@@ -564,16 +642,20 @@ namespace iTunesInfo
             }
         }
 
-        private static readonly Regex displayRegex = new Regex(@"\n\s+|\s+\n", RegexOptions.ExplicitCapture | RegexOptions.Compiled);
-        private void ReadDisplayFormat(string raw)
-        {
-            this.displayFormat = displayRegex.Replace(raw.Trim(), "");
-        }
+        /// <summary>A regular expression to cleanup the display format</summary>
+        private static readonly Regex displayFormatCleanupRegex = new Regex(@"\n\s+|\s+\n", RegexOptions.ExplicitCapture | RegexOptions.Compiled);
 
+        /// <summary>Read the display format from the XML file</summary>
+        /// <param name="raw">The raw text in the XML file</param>
+        private void ReadDisplayFormat(string raw) { this.displayFormat = displayFormatCleanupRegex.Replace(raw.Trim(), ""); }
+
+        /// <summary>Read all the settings from the XML file or use defaults</summary>
         private void ReadAllSettings()
         {
+            // Create the list of possible actions
             CreatePossibleActions();
 
+            // Create the settings for reading the XML file
             XmlReaderSettings settings = new XmlReaderSettings();
             settings.CloseInput = true;
             settings.IgnoreComments = true;
@@ -581,31 +663,20 @@ namespace iTunesInfo
             XmlReader reader = null;
             try
             {
+                // Load the document
                 XmlDocument doc = new XmlDocument();
                 doc.Load(reader = XmlReader.Create("settings.xml", settings));
                 XmlElement root = doc.DocumentElement;
-                try
-                {
-                    ReadSettings((XmlElement)root.GetElementsByTagName("Settings")[0]);
-                }
-                catch (Exception) {}
-                try
-                {
-                    ReadEvents((XmlElement)root.GetElementsByTagName("Events")[0]);
-                }
-                catch (Exception) { }
-                try
-                {
-                    ReadDisplayFormat(root.GetElementsByTagName("Display")[0].InnerText);
-                }
-                catch (Exception) { }
+
+                // Read the settings, events and actions, and display format
+                try { ReadSettings((XmlElement)root.GetElementsByTagName("Settings")[0]);   } catch (Exception) { }
+                try { ReadEvents((XmlElement)root.GetElementsByTagName("Events")[0]);       } catch (Exception) { }
+                try { ReadDisplayFormat(root.GetElementsByTagName("Display")[0].InnerText); } catch (Exception) { }
             }
-            catch (Exception)
-            {
-                /* Use defaults */
-            }
+            catch (Exception) { /* Use defaults */ }
             finally
             {
+                // Cleanup
                 if (reader != null)
                     reader.Close();
 
@@ -615,12 +686,18 @@ namespace iTunesInfo
             }
         }
         
+        /// <summary>Write events to the XML file</summary>
+        /// <typeparam name="T">The type of event key (either string or Keys)</typeparam>
+        /// <param name="xml">The XML writer to use</param>
+        /// <param name="elemName">The element name to use for the events (either "Event" or "KeyEvent")</param>
+        /// <param name="events">The dictionary of events (either this.Events or this.KeyEvents)</param>
         private void WriteEvents<T>(XmlWriter xml, string elemName, Dictionary<T, List<ThreadStart>> events)
         {
             foreach (var evnt in events)
             {
                 if (evnt.Value.Count > 0)
                 {
+                    // Write all events with more than one action
                     xml.WriteStartElement(elemName);
                     xml.WriteAttributeString("When", evnt.Key.ToString());
                     foreach (ThreadStart a in evnt.Value)
@@ -629,11 +706,15 @@ namespace iTunesInfo
                 }
             }
         }
+        /// <summary>Write all the settings to the XML file</summary>
         private void WriteAllSettings()
         {
+            // Start the document
             XmlWriter xml = XmlWriter.Create("settings.xml");
             xml.WriteStartDocument();
             xml.WriteStartElement("iTunesInfo");
+
+            // Write the basic settings
             xml.WriteStartElement("Settings");
             xml.WriteElementString("AllowGlass", this.glassAllowed.ToString());
             xml.WriteElementString("MinimizeOnStart", this.minimizeOnStart.ToString());
@@ -650,11 +731,17 @@ namespace iTunesInfo
                 xml.WriteElementString(setting.Key, text);
             }
             xml.WriteEndElement(); // Settings
+
+            // Write the events / actions
             xml.WriteStartElement("Events");
             WriteEvents(xml, "Event", this.Events);
             WriteEvents(xml, "KeyEvent", this.KeyEvents);
             xml.WriteEndElement(); // Events
+
+            // Write the display format text
             xml.WriteElementString("Display", this.displayFormat);
+
+            // Finish up
             xml.WriteEndElement(); // iTunesInfo
             xml.WriteEndDocument();
             xml.Close();
@@ -698,8 +785,16 @@ namespace iTunesInfo
         #endregion
 
         #region Display Management
-        private bool glassAllowed = true, usingGlass = false;
-        private TrackDisplay dis, backup = null;
+        /// <summary>If a glass display is allowed</summary>
+        private bool glassAllowed = true;
+        /// <summary>If a glass display is currently be used</summary>
+        private bool usingGlass = false;
+        /// <summary>The primary display, the one being used</summary>
+        private TrackDisplay dis;
+        /// <summary>The backup display, available to be used if 'glassAllowed' or the DWM state changes</summary>
+        private TrackDisplay backup = null;
+        /// <summary>Setup a display window by copying all of the settings to it and adding the necessary events</summary>
+        /// <param name="dis">The display to setup</param>
         private void SetupDisplay(TrackDisplay dis)
         {
             dis.MaxWidth = (int)this.settings["MaxWidth"];
@@ -733,33 +828,42 @@ namespace iTunesInfo
             dis.MouseClick += new MouseEventHandler(OnMouseClick);
             dis.MouseDoubleClick += new MouseEventHandler(OnMouseDoubleClick);
         }
+        /// <summary>Create the display(s) that will be used</summary>
         private void CreateDisplay()
         {
             if (Glass.Supported)
             {
+                // Glass is supported need to create both a glass and basic display
                 this.usingGlass = true;
                 this.SetupDisplay(this.dis = new GlassTrackDisplay(this));
                 this.SetupDisplay(this.backup = new BasicTrackDisplay(this));
-                this.SetDisplay();
+                this.SetActiveDisplay();
             }
             else
             {
+                // Glass is not supported, basic display only 
                 this.SetupDisplay(this.dis = new BasicTrackDisplay(this));
             }
         }
+        /// <summary>Overridden to detect changes in DWM composition changes</summary>
+        /// <param name="m">The Windows message</param>
         protected override void WndProc(ref Message m)
         {
             if (m.Msg == Glass.WM_DWMCOMPOSITIONCHANGED)
             {
-                SetDisplay();
+                // The DWM Composition state changed (Glass.Enabled changed)
+                SetActiveDisplay(); // update which display is being shown
                 m.Result = IntPtr.Zero;
             }
             base.WndProc(ref m);
         }
-        protected void SetDisplay()
+        /// <summary>Set the display that is active, if there is more than one display that can be used</summary>
+        protected void SetActiveDisplay()
         {
-            if (this.backup != null && !this.glassAllowed && this.usingGlass || this.usingGlass != Glass.Enabled)
+            if (this.backup != null && (!this.glassAllowed && this.usingGlass || this.usingGlass != Glass.Enabled))
             {
+                // There is a backup display and it isn't consistent with the current settings
+                // Need to toggle which display is showing
                 bool vis = this.dis.Visible;
                 this.dis.Invoke(new Delegates.Action(this.dis.Hide));
                 TrackDisplay x = this.dis;
@@ -777,6 +881,7 @@ namespace iTunesInfo
                 this.dis.AllowedToAutoClose = true;
             }
         }
+        /// <summary>Close the display forms and destroy them</summary>
         private void ShutdownDisplay()
         {
             if (this.dis != null)
@@ -813,28 +918,45 @@ namespace iTunesInfo
         #endregion
 
         #region iTunes Object
+        /// <summary>True is the iTunes application should be minimized if starting this program caused it to open</summary>
         private bool minimizeOnStart = false;
+        /// <summary>True if the iTunes COM connection is currently disabled (deferring calls)</summary>
         private bool itunesComDisabled = true;
+        /// <summary>The iTunes application object</summary>
         private iTunesApp itunes;
+        /// <summary>The event handler for when iTunes starts playing a track</summary>
         private _IiTunesEvents_OnPlayerPlayEventEventHandler playEvent;
+        /// <summary>The event handler for when iTunes stops playing a track</summary>
         private _IiTunesEvents_OnPlayerStopEventEventHandler stopEvent;
+        /// <summary>The event handler for when the current track in iTunes has its information change</summary>
         private _IiTunesEvents_OnPlayerPlayingTrackChangedEventEventHandler trackInfoChangedEvent;
-        private _IiTunesEvents_OnUserInterfaceEnabledEventEventHandler openEvent;
+        /// <summary>The event handler for when iTunes UI is enabled</summary>
+        private _IiTunesEvents_OnUserInterfaceEnabledEventEventHandler uiEnabledEvent;
+        /// <summary>The event handler for when iTunes is about to quit</summary>
         private _IiTunesEvents_OnAboutToPromptUserToQuitEventEventHandler aboutToQuitEvent;
+        /// <summary>The event handler for when iTunes is quitting</summary>
         private _IiTunesEvents_OnQuittingEventEventHandler quitEvent;
+        /// <summary>The event handler for when the sound volume of iTunes changes</summary>
         private _IiTunesEvents_OnSoundVolumeChangedEventEventHandler volumeChangedEvent;
+        /// <summary>The event handler for when iTunes disabled (defers) COM calls</summary>
         private _IiTunesEvents_OnCOMCallsDisabledEventEventHandler comCallsDisabledEvent;
+        /// <summary>The event handler for when iTunes enabled (un-defers) COM calls</summary>
         private _IiTunesEvents_OnCOMCallsEnabledEventEventHandler comCallsEnabledEvent;
+        /// <summary>The event handler for when the iTunes database changes</summary>
         private _IiTunesEvents_OnDatabaseChangedEventEventHandler databaseChangedEvent;
-        private bool IsITunesOpen()
-        {
-            // TODO: Is there a better way? Say, checking for a mutex that iTunes opens?
-            return System.Diagnostics.Process.GetProcessesByName("iTunes").Length > 0;
-        }
+        /// <summary>Gets true if iTunes is currently open</summary>
+        private static bool IsITunesOpen
+        { get {
+                // TODO: Is there a better way? Say, checking for a mutex that iTunes opens?
+                return System.Diagnostics.Process.GetProcessesByName("iTunes").Length > 0;
+        } }
+        /// <summary>Setup the iTunes connection and events</summary>
         private void SetupITunes()
         {
-            bool minimize = this.minimizeOnStart && !IsITunesOpen();
+            // Minimize after creating the iTunes connection only if iTunes is not currently open
+            bool minimize = this.minimizeOnStart && !IsITunesOpen;
 
+            // Create the iTunes connection
             try
             {
                 this.itunes = new iTunesApp();
@@ -846,13 +968,16 @@ namespace iTunesInfo
                 return;
             }
             this.itunesComDisabled = false;
-            if (minimize)
-                this.itunes.Windows[1].Minimized = true;
 
+            // Possibly minimize the window
+            if (minimize)
+                this.itunes.BrowserWindow.Minimized = true;
+
+            // Add the iTunes events
             this.itunes.OnPlayerPlayEvent               += this.playEvent               = new _IiTunesEvents_OnPlayerPlayEventEventHandler(this.OnPlay);
             this.itunes.OnPlayerStopEvent               += this.stopEvent               = new _IiTunesEvents_OnPlayerStopEventEventHandler(this.OnStop);
             this.itunes.OnPlayerPlayingTrackChangedEvent+= this.trackInfoChangedEvent   = new _IiTunesEvents_OnPlayerPlayingTrackChangedEventEventHandler(this.OnTrackInfoChanged);
-            this.itunes.OnUserInterfaceEnabledEvent     += this.openEvent               = new _IiTunesEvents_OnUserInterfaceEnabledEventEventHandler(this.OnOpen);
+            this.itunes.OnUserInterfaceEnabledEvent     += this.uiEnabledEvent          = new _IiTunesEvents_OnUserInterfaceEnabledEventEventHandler(this.OnUIEnabled);
             this.itunes.OnAboutToPromptUserToQuitEvent  += this.aboutToQuitEvent        = new _IiTunesEvents_OnAboutToPromptUserToQuitEventEventHandler(this.OnAboutToQuit);
             this.itunes.OnQuittingEvent                 += this.quitEvent               = new _IiTunesEvents_OnQuittingEventEventHandler(this.OnQuitting);
             this.itunes.OnSoundVolumeChangedEvent       += this.volumeChangedEvent      = new _IiTunesEvents_OnSoundVolumeChangedEventEventHandler(this.OnVolumeChanged);
@@ -860,35 +985,50 @@ namespace iTunesInfo
             this.itunes.OnCOMCallsEnabledEvent          += this.comCallsEnabledEvent    = new _IiTunesEvents_OnCOMCallsEnabledEventEventHandler(this.ComCallsEnabled);
             this.itunes.OnDatabaseChangedEvent          += this.databaseChangedEvent    = new _IiTunesEvents_OnDatabaseChangedEventEventHandler(this.OnDatabaseChanged);
         }
-        private void ComCallsDisabled(ITCOMDisabledReason reason) { this.itunesComDisabled = true; } // reason is Dialog, Quitting, or Other
+        /// <summary>Event is called when COM calls become disabled (deferred)</summary>
+        /// <param name="reason">The reason COM calls are being disabled (deferred) [one of Dialog, Quitting, or Other]</param>
+        private void ComCallsDisabled(ITCOMDisabledReason reason) { this.itunesComDisabled = true; }
+        /// <summary>Event is called when COM calls become enabled (non-deferred) again</summary>
         private void ComCallsEnabled() { this.itunesComDisabled = false; }
-        public bool iTunesDisabled { get { return this.itunesComDisabled; } }
+        /// <summary>Get if iTunes calls are currently being deferred</summary>
+        public bool iTunesDeferred { get { return this.itunesComDisabled; } }
+        /// <summary>Close the connection to iTunes which is very important since iTunes otherwise tells the user a plugin isn't responding and other plugins are messed up</summary>
+        /// <remarks>This involves removing all the added events, possibly quitting iTunes, and releasing the iTunes object</remarks>
+        /// <param name="quit">If true, causes iTunes to quit, otherwise just the connection is closed</param>
         private void ShutdownITunes(bool quit)
         {
             if (this.itunes != null)
             {
                 this.itunesComDisabled = true;
+
+                // Remove all the added events
                 this.itunes.OnPlayerPlayEvent                   -= this.playEvent;
                 this.itunes.OnPlayerStopEvent                   -= this.stopEvent;
                 this.itunes.OnPlayerPlayingTrackChangedEvent    -= this.trackInfoChangedEvent;
-                this.itunes.OnUserInterfaceEnabledEvent         -= this.openEvent;
+                this.itunes.OnUserInterfaceEnabledEvent         -= this.uiEnabledEvent;
                 this.itunes.OnAboutToPromptUserToQuitEvent      -= this.aboutToQuitEvent;
                 this.itunes.OnQuittingEvent                     -= this.quitEvent;
                 this.itunes.OnSoundVolumeChangedEvent           -= this.volumeChangedEvent;
                 this.itunes.OnCOMCallsDisabledEvent             -= this.comCallsDisabledEvent;
                 this.itunes.OnCOMCallsEnabledEvent              -= this.comCallsEnabledEvent;
                 this.itunes.OnDatabaseChangedEvent              -= this.databaseChangedEvent;
-                if (quit)
-                    this.itunes.Quit();
+
+                // Possibly quit iTunes
+                if (quit) this.itunes.Quit();
+
+                // Release the iTunes object
                 Marshal.ReleaseComObject(this.itunes);
                 this.itunes = null;
             }
         }
         #endregion
 
+        /// <summary>Starts the program</summary>
+        /// <remarks>This involves reading all settings in (or using defaults), connecting to iTunes, creating the display(s) and option forms, and starting event monitoring</remarks>
         public Controller()
         {
-            this.Icon = iTunesInfo.Properties.Resources.icon;
+            this.Icon = iTunesInfo.Properties.Resources.icon; // should never be seen, but might as well set it
+            this.Text = "iTunes Track Information Controller"; // should never be seen, but might as well set it
             this.ReadAllSettings();
             this.SetupITunes();
             this.CreateDisplay();
@@ -898,10 +1038,16 @@ namespace iTunesInfo
             this.UpdateInfo();
             this.dis.FadeIn();
         }
+
+        /// <summary>When being destroyed, call the shutdown function to make sure the quit is clean</summary>
         ~Controller() { this.Shutdown(true); }
         
+        /// <summary>Quits this program (and possibly iTunes)</summary>
+        /// <remarks>This involves stopping event monitoring, closing all forms, closing the iTunes connection (very important!) and saving the settings</remarks>
+        /// <param name="itunesQuit">If true, quits iTunes along with this program, otherwise just quits this program</param>
         private void Shutdown(bool itunesQuit)
         {
+            KeyMonitor.Stop();
             this.ShutdownDisplay();
             this.ShutdownOptions();
             this.ShutdownITunes(itunesQuit);
@@ -914,7 +1060,9 @@ namespace iTunesInfo
         /// <param name="value">If the form is becoming visible</param>
         protected override void SetVisibleCore(bool value) { base.SetVisibleCore(false); }
 
-        private void SetTrackRating(double x) // from 0 to 5, halves are allowed, but no other fractions
+        /// <summary>Set the rating for the current track</summary>
+        /// <param name="x">The rating, from 0 to 5, rounded to the closest half</param>
+        private void SetTrackRating(double x) // 
         {
             IITTrack track = itunes.CurrentTrack;
             if (track != null)
@@ -923,7 +1071,9 @@ namespace iTunesInfo
                 track.Rating = rating.Clamp(0, 100);
             }
         }
-        private void SetAlbumRating(double x) // from 0 to 5, halves are allowed, but no other fractions
+        /// <summary>Set the album rating for the current track, which only does something for tracks that are URLs, Files, or on a CD</summary>
+        /// <param name="x">The rating, from 0 to 5, rounded to the closest half</param>
+        private void SetAlbumRating(double x)
         {
             IITTrack track = itunes.CurrentTrack;
             if (track != null)
@@ -931,6 +1081,7 @@ namespace iTunesInfo
                 int rating = Convert.ToInt32(x * 2) * 10;
                 rating = rating.Clamp(0, 100);
 
+                // Get the track as a different type so that the album rating can be set
                 IITURLTrack urlT;
                 IITFileOrCDTrack fileT;
                 if ((urlT = track as IITURLTrack) != null)
@@ -940,7 +1091,10 @@ namespace iTunesInfo
             }
         }
 
-        private string displayFormat = "{TrackName}\n{TrackAlbum}\n{TrackArtist}\n{TrackRating}\n{TrackArtwork}";
+        /// <summary>The display text format string which is used to generate the content that is displayed</summary>
+        private string displayFormat = DefaultDisplayTextFormat;
+
+        /// <summary>Update the displayed information by generating the content from the display format</summary>
         protected void UpdateInfo()
         {
             this.dis.Content = (this.itunes.CurrentTrack != null) ? Props.GetDisplayContent(this.itunes, this.displayFormat) : TrackDisplay.DefaultContent;
@@ -948,64 +1102,127 @@ namespace iTunesInfo
         }
 
         #region Threadstartable Actions
-        public void Play()          { itunes.Play(); }
-        public void Pause()         { itunes.Pause(); }
-        public void Stop()          { itunes.Stop(); }
-        public void PlayPause()     { itunes.PlayPause(); }
-        public void BackTrack()     { itunes.BackTrack(); }
-        public void NextTrack()     { itunes.NextTrack(); }
-        public void PreviousTrack() { itunes.PreviousTrack(); }
-        public void Rewind()        { itunes.Rewind(); }
-        public void FastForward()   { itunes.FastForward(); }
-        public void Resume()        { itunes.Resume(); }
-        public void ToggleMute()    { itunes.Mute = !itunes.Mute; }
-        public void ToggleShuffle() { if (itunes.CanSetShuffle[itunes.CurrentPlaylist]) itunes.CurrentPlaylist.Shuffle = !itunes.CurrentPlaylist.Shuffle; }
-        public void RateTrack0()    { SetTrackRating(0); }
-        public void RateTrack0_5()  { SetTrackRating(0.5); }
-        public void RateTrack1()    { SetTrackRating(1); }
-        public void RateTrack1_5()  { SetTrackRating(1.5); }
-        public void RateTrack2()    { SetTrackRating(2); }
-        public void RateTrack2_5()  { SetTrackRating(2.5); }
-        public void RateTrack3()    { SetTrackRating(3); }
-        public void RateTrack3_5()  { SetTrackRating(3.5); }
-        public void RateTrack4()    { SetTrackRating(4); }
-        public void RateTrack4_5()  { SetTrackRating(4.5); }
-        public void RateTrack5()    { SetTrackRating(5); }
-        public void RateAlbum0()    { SetAlbumRating(0); }
-        public void RateAlbum0_5()  { SetAlbumRating(0.5); }
-        public void RateAlbum1()    { SetAlbumRating(1); }
-        public void RateAlbum1_5()  { SetAlbumRating(1.5); }
-        public void RateAlbum2()    { SetAlbumRating(2); }
-        public void RateAlbum2_5()  { SetAlbumRating(2.5); }
-        public void RateAlbum3()    { SetAlbumRating(3); }
-        public void RateAlbum3_5()  { SetAlbumRating(3.5); }
-        public void RateAlbum4()    { SetAlbumRating(4); }
-        public void RateAlbum4_5()  { SetAlbumRating(4.5); }
-        public void RateAlbum5()    { SetAlbumRating(5); }
-        public void ToggleITunes()  { itunes.BrowserWindow.Visible = !itunes.BrowserWindow.Visible; }
+        /// <summary>Cause iTunes to play</summary>
+        public void Play()          { this.itunes.Play(); }
+        /// <summary>Cause iTunes to pause playback</summary>
+        public void Pause()         { this.itunes.Pause(); }
+        /// <summary>Cause iTunes to stop playback</summary>
+        public void Stop()          { this.itunes.Stop(); }
+        /// <summary>Cause iTunes to toggle between play and pause</summary>
+        public void PlayPause()     { this.itunes.PlayPause(); }
+        /// <summary>Cause iTunes to go return to the start of the current track</summary>
+        public void BackTrack()     { this.itunes.BackTrack(); }
+        /// <summary>Cause iTunes to skip to the next track</summary>
+        public void NextTrack()     { this.itunes.NextTrack(); }
+        /// <summary>Cause iTunes to skip to the previous track</summary>
+        public void PreviousTrack() { this.itunes.PreviousTrack(); }
+        /// <summary>Cause iTunes to begin rewinding</summary>
+        public void Rewind()        { this.itunes.Rewind(); }
+        /// <summary>Cause iTunes to begin fast forwarding</summary>
+        public void FastForward()   { this.itunes.FastForward(); }
+        /// <summary>Cause iTunes to resume normal playback (stop rewinding or fast forwarding)</summary>
+        public void Resume()        { this.itunes.Resume(); }
+        /// <summary>Toggle iTunes' mute</summary>
+        public void ToggleMute()    { this.itunes.Mute = !this.itunes.Mute; }
+        /// <summary>Toggle iTunes' shuffle</summary>
+        public void ToggleShuffle() { if (this.itunes.CanSetShuffle[this.itunes.CurrentPlaylist]) this.itunes.CurrentPlaylist.Shuffle = !this.itunes.CurrentPlaylist.Shuffle; }
+        /// <summary>Set the rating of the current track to 0 stars</summary>
+        public void RateTrack0()    { this.SetTrackRating(0); }
+        /// <summary>Set the rating of the current track to 1/2 star</summary>
+        public void RateTrack0_5()  { this.SetTrackRating(0.5); }
+        /// <summary>Set the rating of the current track to 1 star</summary>
+        public void RateTrack1()    { this.SetTrackRating(1); }
+        /// <summary>Set the rating of the current track to 1 1/2 stars</summary>
+        public void RateTrack1_5()  { this.SetTrackRating(1.5); }
+        /// <summary>Set the rating of the current track to 2 stars</summary>
+        public void RateTrack2()    { this.SetTrackRating(2); }
+        /// <summary>Set the rating of the current track to 2 1/2 stars</summary>
+        public void RateTrack2_5()  { this.SetTrackRating(2.5); }
+        /// <summary>Set the rating of the current track to 3 stars</summary>
+        public void RateTrack3()    { this.SetTrackRating(3); }
+        /// <summary>Set the rating of the current track to 3 1/2 stars</summary>
+        public void RateTrack3_5()  { this.SetTrackRating(3.5); }
+        /// <summary>Set the rating of the current track to 4 stars</summary>
+        public void RateTrack4()    { this.SetTrackRating(4); }
+        /// <summary>Set the rating of the current track to 4 1/2 stars</summary>
+        public void RateTrack4_5()  { this.SetTrackRating(4.5); }
+        /// <summary>Set the rating of the current track to 5 stars</summary>
+        public void RateTrack5()    { this.SetTrackRating(5); }
+        /// <summary>Set the album rating of the current track to 0 stars</summary>
+        public void RateAlbum0()    { this.SetAlbumRating(0); }
+        /// <summary>Set the album rating of the current track to 1/2 star</summary>
+        public void RateAlbum0_5()  { this.SetAlbumRating(0.5); }
+        /// <summary>Set the album rating of the current track to 1 star</summary>
+        public void RateAlbum1()    { this.SetAlbumRating(1); }
+        /// <summary>Set the album rating of the current track to 1 1/2 stars</summary>
+        public void RateAlbum1_5()  { this.SetAlbumRating(1.5); }
+        /// <summary>Set the album rating of the current track to 2 stars</summary>
+        public void RateAlbum2()    { this.SetAlbumRating(2); }
+        /// <summary>Set the album rating of the current track to 2 1/2 stars</summary>
+        public void RateAlbum2_5()  { this.SetAlbumRating(2.5); }
+        /// <summary>Set the album rating of the current track to 3 stars</summary>
+        public void RateAlbum3()    { this.SetAlbumRating(3); }
+        /// <summary>Set the album rating of the current track to 3 1/2 stars</summary>
+        public void RateAlbum3_5()  { this.SetAlbumRating(3.5); }
+        /// <summary>Set the album rating of the current track to 4 stars</summary>
+        public void RateAlbum4()    { this.SetAlbumRating(4); }
+        /// <summary>Set the album rating of the current track to 4 1/2 stars</summary>
+        public void RateAlbum4_5()  { this.SetAlbumRating(4.5); }
+        /// <summary>Set the album rating of the current track to 5 stars</summary>
+        public void RateAlbum5()    { this.SetAlbumRating(5); }
+        /// <summary>Toggle if the main iTunes window is visible</summary>
+        public void ToggleITunes()  { this.itunes.BrowserWindow.Visible = !this.itunes.BrowserWindow.Visible; }
+        /// <summary>Increase the iTunes sound volume</summary>
         public void VolumeUp()      { itunes.SoundVolume += 1; }
+        /// <summary>Decrease the iTunes sound volume</summary>
         public void VolumeDown()    { itunes.SoundVolume -= 1; }
+        /// <summary>Show the track information display</summary>
         public void ShowTrackInfo() { dis.FadeIn(); }
+        /// <summary>Hide the track information display</summary>
         public void HideTrackInfo() { dis.FadeOut(); }
+        /// <summary>Show the track information display now (without fading)</summary>
         public void ShowTrackInfoNow()      { dis.ShowNow(); }
+        /// <summary>Hide the track information display now (without fading)</summary>
         public void HideTrackInfoNow()      { dis.HideNow(); }
+        /// <summary>Keep the track information display open instead of auto-closing</summary>
         public void KeepTrackInfoOpen()     { dis.AllowedToAutoClose = false; }
+        /// <summary>Allow the track information display auto-closing after being open for a delay</summary>
         public void AllowTrackInfoToClose() { dis.AllowedToAutoClose = true; }
+        /// <summary>Show the options dialog</summary>
         public void ShowOptions()   { ShowForm(this.options); }
+        /// <summary>Quit iTunes and the track information display</summary>
         public void Quit()          { this.Shutdown(true); }
+        /// <summary>Quit track information display but leaves iTunes open</summary>
         public void DisQuit()       { this.Shutdown(false); }
+        /// <summary>Sleep for 1/2 second</summary>
         public void Sleep_5()       { Thread.Sleep(500); }
+        /// <summary>Sleep for 1 second</summary>
         public void Sleep1()        { Thread.Sleep(1000); }
+        /// <summary>Sleep for 5 seconds</summary>
         public void Sleep5()        { Thread.Sleep(5000); }
+        /// <summary>Sleep for 10 seconds</summary>
         public void Sleep10()       { Thread.Sleep(10000); }
+        /// <summary>Sleep for 30 seconds</summary>
         public void Sleep30()       { Thread.Sleep(30000); }
+        /// <summary>Sleep for 60 seconds</summary>
         public void Sleep60()       { Thread.Sleep(60000); }
         #endregion
 
         #region Events
+        /// <summary>Execute a list of actions using a thread pool</summary>
+        /// <param name="actions">The list of actions to executes</param>
+        /// <returns>True if there were actions in the list and they were successfully queued in the thread pool</returns>
         private bool ExecuteActions(List<ThreadStart> actions) { return actions != null && actions.Count > 0 && ThreadPool.QueueUserWorkItem(this.ExecuteActionsThread, actions); }
-        private void ExecuteActionsThread(object param) { foreach (ThreadStart a in (List<ThreadStart>)param) a(); }
-        private bool ExecuteEvent(string evt) { List<ThreadStart> t; return this.Events.TryGetValue(evt, out t) && this.ExecuteActions(t); }
+        /// <summary>Execute a list of actions within a thread</summary>
+        /// <param name="param">The thread parameter, a list of ThreadStart objects</param>
+        private void ExecuteActionsThread(object param)        { foreach (ThreadStart a in (List<ThreadStart>)param) a(); }
+        /// <summary>Execute the actions associated with an event</summary>
+        /// <param name="evt">The name of the event to execute</param>
+        /// <returns>True if at least one action was executed</returns>
+        private bool ExecuteEvent(string evt)                  { List<ThreadStart> t; return this.Events.TryGetValue(evt, out t) && this.ExecuteActions(t); }
+        /// <summary>Execute the actions associated with a mouse button event</summary>
+        /// <param name="b">The mouse buttons that are pressed</param>
+        /// <param name="evt">The base name of the event (e.g. "click")</param>
         private void ExecuteButtonEvents(MouseButtons b, string evt)
         {
             this.ExecuteEvent(evt);
@@ -1016,6 +1233,9 @@ namespace iTunesInfo
             if ((b & MouseButtons.XButton2) != 0)   this.ExecuteEvent("x2" + evt);
         }
 
+        /// <summary>Event is fired when a key is either pressed or released on the system</summary>
+        /// <param name="sender">The sender of the event</param>
+        /// <param name="e">The key event arguments</param>
         protected void OnKeyChanged(object sender, KeyEventArgs e)
         {
             Keys k = KeyMonitor.Keys;
@@ -1025,24 +1245,67 @@ namespace iTunesInfo
                 e.Handled = this.ExecuteActions(t);
         }
 
-        protected void OnGotFocus(object sender, EventArgs e)               { Debug.WriteLine("OnGotFocus");            this.ExecuteEvent("gotfocus"); }
-        protected void OnLostFocus(object sender, EventArgs e)              { Debug.WriteLine("OnLostFocus");           this.ExecuteEvent("lostfocus"); }
-        protected void OnMouseEnter(object sender, EventArgs e)             { Debug.WriteLine("OnMouseEnter");          this.ExecuteEvent("enter"); }
-        protected void OnMouseLeave(object sender, EventArgs e)             { Debug.WriteLine("OnMouseLeave");          this.ExecuteEvent("leave"); }
-        protected void OnMouseWheel(object sender, MouseEventArgs e)        { Debug.WriteLine("OnMouseWheel");          this.ExecuteEvent("wheel"); }
-        protected void OnMouseClick(object sender, MouseEventArgs e)        { Debug.WriteLine("OnMouse");               this.ExecuteButtonEvents(e.Button, "click"); }
-        protected void OnMouseDoubleClick(object sender, MouseEventArgs e)  { Debug.WriteLine("OnMouseDoubleClick");    this.ExecuteButtonEvents(e.Button, "doubleclick"); }
+        /// <summary>Event is fired when the display gains focus</summary>
+        /// <param name="sender">The sender of the event</param>
+        /// <param name="e">The event arguments</param>
+        protected void OnGotFocus(object sender, EventArgs e)              { Debug.WriteLine("OnGotFocus");         this.ExecuteEvent("gotfocus"); }
+        /// <summary>Event is fired when the display loses focus</summary>
+        /// <param name="sender">The sender of the event</param>
+        /// <param name="e">The event arguments</param>
+        protected void OnLostFocus(object sender, EventArgs e)             { Debug.WriteLine("OnLostFocus");        this.ExecuteEvent("lostfocus"); }
+        /// <summary>Event is fired when the mouse enters the display</summary>
+        /// <param name="sender">The sender of the event</param>
+        /// <param name="e">The event arguments</param>
+        protected void OnMouseEnter(object sender, EventArgs e)            { Debug.WriteLine("OnMouseEnter");       this.ExecuteEvent("enter"); }
+        /// <summary>Event is fired when the mouse leaves the display</summary>
+        /// <param name="sender">The sender of the event</param>
+        /// <param name="e">The event arguments</param>
+        protected void OnMouseLeave(object sender, EventArgs e)            { Debug.WriteLine("OnMouseLeave");       this.ExecuteEvent("leave"); }
+        /// <summary>Event is fired when the mouse wheel is used on the display</summary>
+        /// <param name="sender">The sender of the event</param>
+        /// <param name="e">The mouse event arguments</param>
+        protected void OnMouseWheel(object sender, MouseEventArgs e)       { Debug.WriteLine("OnMouseWheel");       this.ExecuteEvent("wheel"); }
+        /// <summary>Event is fired when the mouse clicks the display</summary>
+        /// <param name="sender">The sender of the event</param>
+        /// <param name="e">The mouse event arguments</param>
+        protected void OnMouseClick(object sender, MouseEventArgs e)       { Debug.WriteLine("OnMouseClick");       this.ExecuteButtonEvents(e.Button, "click"); }
+        /// <summary>Event is fired when the mouse double clicks the display</summary>
+        /// <param name="sender">The sender of the event</param>
+        /// <param name="e">The mouse event arguments</param>
+        protected void OnMouseDoubleClick(object sender, MouseEventArgs e) { Debug.WriteLine("OnMouseDoubleClick"); this.ExecuteButtonEvents(e.Button, "doubleclick"); }
 
-        protected void OnPlay(object iTrack)                { Debug.WriteLine("OnPlay");                this.UpdateInfo(); this.ExecuteEvent("play"); }
-        protected void OnStop(object iTrack)                { Debug.WriteLine("OnStop");                this.UpdateInfo(); this.ExecuteEvent("stop"); }
-        protected void OnTrackInfoChanged(object iTrack)    { Debug.WriteLine("OnTrackInfoChanged");    this.UpdateInfo(); this.ExecuteEvent("trackinfochange"); }
+        /// <summary>Event is fired when a track has started playing</summary>
+        /// <param name="iTrack">Track object that played, of type IITTrack</param>
+        protected void OnPlay(object iTrack)                { Debug.WriteLine("OnPlay");             this.UpdateInfo(); this.ExecuteEvent("play"); }
+        /// <summary>Event is fired when a track has stopped playing</summary>
+        /// <param name="iTrack">Track object that stopped, of type IITTrack</param>
+        protected void OnStop(object iTrack)                { Debug.WriteLine("OnStop");             this.UpdateInfo(); this.ExecuteEvent("stop"); }
+        /// <summary>Event is fired when information about the currently playing track has changed</summary>
+        /// <param name="iTrack">Track object that changed, of type IITTrack</param>
+        protected void OnTrackInfoChanged(object iTrack)    { Debug.WriteLine("OnTrackInfoChanged"); this.UpdateInfo(); this.ExecuteEvent("trackinfochange"); }
 
-        protected void OnOpen()                         { Debug.WriteLine("OnOpen");            /*this.ExecuteEvent("userinterface");*/ }
-        protected void OnAboutToQuit()                  { Debug.WriteLine("OnAboutToQuit");     this.Quit(); }
-        protected void OnQuitting()                     { Debug.WriteLine("OnQuitting");        this.Quit(); }
-        protected void OnVolumeChanged(int newVolume)   { Debug.WriteLine("OnVolumeChanged");   this.ExecuteEvent("volumechanged"); }
+        /// <summary>Event is fired when iTunes UI is no longer disabled</summary>
+        protected void OnUIEnabled()                        { Debug.WriteLine("OnUIEnabled");        /*this.ExecuteEvent("uienabled");*/ }
+        /// <summary>Event is fired when iTunes is about to quit</summary>
+        protected void OnAboutToQuit()                      { Debug.WriteLine("OnAboutToQuit");      this.Quit(); }
+        /// <summary>Event is fired when iTunes is quitting</summary>
+        protected void OnQuitting()                         { Debug.WriteLine("OnQuitting");         this.Quit(); }
+        /// <summary>Event is fired when the sound volume has changed</summary>
+        /// <param name="newVolume">The new volume setting, from 0 to 100</param>
+        protected void OnVolumeChanged(int newVolume)       { Debug.WriteLine("OnVolumeChanged");    this.ExecuteEvent("volumechanged"); }
 
+        /// <summary>Event when iTunes changes it's database, currently does nothing</summary>
+        /// <remarks>
+        /// The arguments are two dimensional arrays of integers (int[][]) with the first dimension is the object and the second dimension is:
+        /// 0. Source ID
+        /// 1. Playlist ID
+        /// 2. Track ID
+        /// 3. Track Database ID
+        /// </remarks>
+        /// <param name="deletedObjectIDs">Deleted objects</param>
+        /// <param name="changedObjectIDs">Changed objects</param>
         protected void OnDatabaseChanged(object deletedObjectIDs, object changedObjectIDs)  { Debug.WriteLine("OnDatabaseChanged"); /*this.ExecuteEvent("databasechanged");*/ }
+
         #endregion
     }
 }
