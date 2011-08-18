@@ -522,7 +522,7 @@ namespace iTunesInfo
 
 
         /// <summary>A regular expression to remove symbols from a string</summary>
-        private static readonly Regex symbolCleanupRegex = new Regex(@"[\s/\\+_-.]", RegexOptions.ExplicitCapture | RegexOptions.Compiled);
+        private static readonly Regex symbolCleanupRegex = new Regex(@"[\s/\\+_.-]", RegexOptions.ExplicitCapture | RegexOptions.Compiled);
 
         /// <summary>Convert a string to lower-case and remove many symbols and spaces that are in the string</summary>
         /// <param name="str">The string to convert</param>
