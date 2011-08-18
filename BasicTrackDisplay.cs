@@ -28,7 +28,11 @@ namespace iTunesInfo
     {
         /// <summary>Create a new basic iTunes Track Information Display, which has no system-drawn border</summary>
         /// <param name="controller">The iTunesController using this display</param>
-        public BasicTrackDisplay(Controller controller) : base(controller) { this.FormBorderStyle = FormBorderStyle.None; }
+        public BasicTrackDisplay(Controller controller) : base(controller)
+        {
+            this.FormBorderStyle = FormBorderStyle.None;
+            this.BackColor = Controller.DefaultBackgroundColor;
+        }
 
         /// <summary>The back color is important property used, so tell the base iTunes Track Information Display that the display needs to be rebuilt</summary>
         /// <remarks>Also cases the base OnBackColorChanged</remarks>

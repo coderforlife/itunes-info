@@ -36,6 +36,8 @@ namespace iTunesInfo
     class Controller : Form
     {
         #region Names
+
+        /// <summary>The descriptors for all of the possible events</summary>
         public static readonly Descriptor[] EventNames = 
         {
             new Descriptor("Play", "When a track starts to play"), new Descriptor("Stop", "When a track stops playing"),
@@ -48,6 +50,7 @@ namespace iTunesInfo
             new Descriptor("DoubleClick", "When the display window is double clicked"), new Descriptor("LeftDoubleClick", "When the display window is left doubled clicked"), new Descriptor("RightDoubleClick", "When the display window is right doubled clicked"), new Descriptor("MiddleDoubleClick", "When the display window is middle doubled clicked"), new Descriptor("X1DoubleClick", "When the display window is X1 doubled clicked"), new Descriptor("X2DoubleClick", "When the display window is X2 doubled clicked"),
         };
 
+        /// <summary>The descriptors for all of the possible actions</summary>
         public static readonly Descriptor[] ActionNames = 
         {
             new Descriptor("Play", "Play a track"),
@@ -113,6 +116,7 @@ namespace iTunesInfo
             new Descriptor("Sleep60Sec", "Pause for a minute before running the next action"),
         };
 
+        /// <summary>Dictionary to convert from the lower-case action names to the camel-case versions, being easier to read</summary>
         public static readonly Dictionary<string, string> ActionNamesConverter = new Dictionary<string,string>()
         {
             {"play", "Play"},
@@ -180,11 +184,17 @@ namespace iTunesInfo
         #endregion
 
         #region Actions and Events
+
+        /// <summary>Dictionary for getting an action from it's lower-case name</summary>
         public Dictionary<string, ThreadStart> Name2Action = new Dictionary<string, ThreadStart>();
+        /// <summary>Dictionary for getting the lower-case name for an action</summary>
         public Dictionary<ThreadStart, string> Action2Name = new Dictionary<ThreadStart, string>();
+        /// <summary>All of the actions for non-key events</summary>
         public new Dictionary<string, List<ThreadStart>> Events = new Dictionary<string, List<ThreadStart>>();
+        /// <summary>All of the actions for key events</summary>
         public Dictionary<Keys, List<ThreadStart>> KeyEvents = new Dictionary<Keys, List<ThreadStart>>();
 
+        /// <summary>Create the Name2Action and Action2Name dictionaries</summary>
         private void CreatePossibleActions()
         {
             Name2Action.Add("play", this.Play);
@@ -253,60 +263,98 @@ namespace iTunesInfo
                 Action2Name.Add(i.Value, i.Key);
         }
 
+        /// <summary>Set the events and key events to default choices</summary>
+        private void SetEventsToDefaults()
+        {
+            this.Events.Clear();
+            this.Events.Add("play",             new List<ThreadStart>() { this.ShowTrackInfo         });
+            this.Events.Add("trackinfochange",  new List<ThreadStart>() { this.ShowTrackInfo         });
+            this.Events.Add("gotfocus",         new List<ThreadStart>() { this.KeepTrackInfoOpen     });
+            this.Events.Add("lostfocus",        new List<ThreadStart>() { this.AllowTrackInfoToClose });
+            this.Events.Add("enter",            new List<ThreadStart>() { this.KeepTrackInfoOpen     });
+            this.Events.Add("leave",            new List<ThreadStart>() { this.AllowTrackInfoToClose });
+            this.Events.Add("leftclick",        new List<ThreadStart>() { this.HideTrackInfoNow      });
+            this.Events.Add("rightclick",       new List<ThreadStart>() { this.ShowOptions           });
+            this.Events.Add("leftdoubleclick",  new List<ThreadStart>() { this.NextTrack             });
+            this.KeyEvents.Clear();
+            this.KeyEvents.Add(new Keys(Key.Ctrl, Key.Alt, Key.Left_Win, Key.P),     new List<ThreadStart>() { this.PlayPause     });
+            this.KeyEvents.Add(new Keys(Key.Ctrl, Key.Alt, Key.Left_Win, Key.Left),  new List<ThreadStart>() { this.PreviousTrack });
+            this.KeyEvents.Add(new Keys(Key.Ctrl, Key.Alt, Key.Left_Win, Key.Right), new List<ThreadStart>() { this.NextTrack     });
+            this.KeyEvents.Add(new Keys(Key.Ctrl, Key.Alt, Key.Left_Win, Key.O),     new List<ThreadStart>() { this.ShowOptions   });
+            this.KeyEvents.Add(new Keys(Key.Ctrl, Key.Alt, Key.Left_Win, Key.Q),     new List<ThreadStart>() { this.DisQuit       });
+        }
+
+        /// <summary>Get the nice camel-case name of an action from an action</summary>
+        /// <param name="a">The action</param>
+        /// <returns>The camel-case name</returns>
         public string GetActionName(ThreadStart a) { return ActionNamesConverter[this.Action2Name[a]]; }
+        /// <summary>Get the descriptor for an action</summary>
+        /// <param name="a">The action</param>
+        /// <returns>The descriptor</returns>
         public Descriptor GetActionDesc(ThreadStart a)
         {
             string name = this.Action2Name[a];
+            // Cycle through all actions descriptors
             foreach (Descriptor d in ActionNames)
-                if (d.Name.Equals(name, StringComparison.InvariantCultureIgnoreCase))
+                if (d.Name.Equals(name, StringComparison.InvariantCultureIgnoreCase)) // match the name
                     return d;
             return default(Descriptor);
         }
+        /// <summary>Helper function to add an action to an event</summary>
+        /// <typeparam name="T">The key for the event (either string or Keys)</typeparam>
+        /// <param name="events">The events dictionary (either this.Events or this.KeyEvents)</param>
+        /// <param name="evnt">The event key</param>
+        /// <param name="index">The index to insert at (must be valid)</param>
+        /// <param name="a">The action to add</param>
+        private static void AddActionToEventInternal<T>(Dictionary<T, List<ThreadStart>> events, T evnt, int index, ThreadStart a)
+        {
+            List<ThreadStart> actions;
+            if (events.TryGetValue(evnt, out actions))
+                actions.Insert(index, a); // already have the event, add the action
+            else
+                events[evnt] = new List<ThreadStart> { a }; // make a new set of actions for the event
+        }
+        /// <summary>Add an action by name to an event</summary>
+        /// <param name="evnt">The event to add the action to</param>
+        /// <param name="index">The index to add the action at (must be valid)</param>
+        /// <param name="action">The name of the action to add, case is ignored</param>
         public void AddActionToEvent(string evnt, int index, string action)
         {
             ThreadStart a = this.Name2Action[action.ToLower()];
-            List<ThreadStart> actions;
             if (evnt.StartsWith("Key: "))
-            {
-                Keys k = Keys.FromString(evnt.Substring(5));
-                if (this.KeyEvents.TryGetValue(k, out actions))
-                    actions.Insert(index, a);
-                else
-                    this.KeyEvents[k] = new List<ThreadStart> { a };
-            }
+                AddActionToEventInternal(this.KeyEvents, Keys.FromString(evnt.Substring(5)), index, a);
             else
-            {
-                evnt = evnt.ToLower();
-                if (this.Events.TryGetValue(evnt, out actions))
-                    actions.Insert(index, a);
-                else
-                    this.Events[evnt] = new List<ThreadStart> { a };
-            }
+                AddActionToEventInternal(this.Events, evnt.ToLower(), index, a);
         }
-        public void RemoveActionFromEvent(string evnt, int index)
+        /// <summary>Helper function to remove an action from an event</summary>
+        /// <typeparam name="T">The key for the event (either string or Keys)</typeparam>
+        /// <param name="events">The events dictionary (either this.Events or this.KeyEvents)</param>
+        /// <param name="evnt">The event key</param>
+        /// <param name="index">The index of the action to remove (must be valid)</param>
+        private static void RemoveActionFromEventInternal<T>(Dictionary<T, List<ThreadStart>> events, T evnt, int index)
         {
             List<ThreadStart> actions;
-            if (evnt.StartsWith("Key: "))
+            if (events.TryGetValue(evnt, out actions))
             {
-                Keys k = Keys.FromString(evnt.Substring(5));
-                if (this.KeyEvents.TryGetValue(k, out actions))
-                {
-                    actions.RemoveAt(index);
-                    if (actions.Count == 0)
-                        this.KeyEvents.Remove(k);
-                }
-            }
-            else
-            {
-                evnt = evnt.ToLower();
-                if (this.Events.TryGetValue(evnt, out actions))
-                {
-                    actions.RemoveAt(index);
-                    if (actions.Count == 0)
-                        this.Events.Remove(evnt);
-                }
+                actions.RemoveAt(index);
+                if (actions.Count == 0)
+                    events.Remove(evnt);
             }
         }
+        /// <summary>Remove an action from an event</summary>
+        /// <param name="evnt">The event to remove the action from</param>
+        /// <param name="index">The index of the action to remove (must be valid)</param>
+        public void RemoveActionFromEvent(string evnt, int index)
+        {
+            if (evnt.StartsWith("Key: "))
+                RemoveActionFromEventInternal(this.KeyEvents, Keys.FromString(evnt.Substring(5)), index);
+            else
+                RemoveActionFromEventInternal(this.Events, evnt.ToLower(), index);
+        }
+        /// <summary>Swap actions in an event</summary>
+        /// <param name="evnt">The event to change the order of actions for</param>
+        /// <param name="index1">The index of one of the actions</param>
+        /// <param name="index2">The index of the other action</param>
         public void SwapActionsInEvent(string evnt, int index1, int index2)
         {
             List<ThreadStart> actions;
@@ -314,39 +362,54 @@ namespace iTunesInfo
             if (isKey && this.KeyEvents.TryGetValue(Keys.FromString(evnt.Substring(5)), out actions) || !isKey && this.Events.TryGetValue(evnt.ToLower(), out actions))
                 actions.Swap(index1, index2);
         }
-        public void RemoveEvent(string evnt)
+        /// <summary>Helper function to remove an entire event</summary>
+        /// <typeparam name="T">The key for the event (either string or Keys)</typeparam>
+        /// <param name="events">The events dictionary (either this.Events or this.KeyEvents)</param>
+        /// <param name="evnt">The event key</param>
+        private static void RemoveEventInternal<T>(Dictionary<T, List<ThreadStart>> events, T evnt)
         {
             List<ThreadStart> actions;
+            if (events.TryGetValue(evnt, out actions))
+                actions.Clear(); // ensure that if there are other references they are empty
+            events.Remove(evnt);
+        }
+        /// <summary>Remove an entire event</summary>
+        /// <param name="evnt">The event to remove</param>
+        public void RemoveEvent(string evnt)
+        {
             if (evnt.StartsWith("Key: "))
-            {
-                Keys k = Keys.FromString(evnt.Substring(5));
-                if (this.KeyEvents.TryGetValue(k, out actions))
-                    actions.Clear();
-                this.KeyEvents.Remove(k);
-            }
+                RemoveEventInternal(this.KeyEvents, Keys.FromString(evnt.Substring(5)));
             else
-            {
-                evnt = evnt.ToLower();
-                if (this.Events.TryGetValue(evnt, out actions))
-                    actions.Clear();
-                this.Events.Remove(evnt);
-            }
+                RemoveEventInternal(this.Events, evnt.ToLower());
         }
         #endregion
 
         #region Settings
-        public static int           DefaultMaxWidth         = 250;
-        public static int           DefaultLineSpacing      = 3;
-        public static int           DefaultGlowSize         = 8;
-        public static int           DefaultInsideMargin     = 6;
-        public static int           DefaultOutsideMargin    = 12;
-        public static double        DefaultMaxOpacity       = 0.8;
-        public static int           DefaultFadeTime         = 750;
-        public static int           DefaultVisibleTime      = 5000;
-        public static DesktopPos    DefaultDesktopPosition  = DesktopPos.NearClock;
-        public static Color         DefaultTextColor        = Color.Black;
-        public static Color         DefaultBackgroundColor  = Color.White;
-        //public static Font          DefaultFont             = Form.DefaultFont;
+        /// <summary>The default maximum width</summary>
+        public const int    DefaultMaxWidth      = 250;
+        /// <summary>The default line spacing</summary>
+        public const int    DefaultLineSpacing   = 3;
+        /// <summary>The default glow size</summary>
+        public const int    DefaultGlowSize      = 8;
+        /// <summary>The default inside margin</summary>
+        public const int    DefaultInsideMargin  = 6;
+        /// <summary>The default outside margin</summary>
+        public const int    DefaultOutsideMargin = 12;
+        /// <summary>The default max opacity</summary>
+        public const double DefaultMaxOpacity    = 0.9;
+        /// <summary>The default fade time</summary>
+        public const int    DefaultFadeTime      = 200;
+        /// <summary>The default visible time</summary>
+        public const int    DefaultVisibleTime   = 3000;
+        /// <summary>The default desktop position</summary>
+        public static readonly DesktopPos DefaultDesktopPosition = DesktopPos.NearClock;
+        /// <summary>The default text color</summary>
+        public static readonly Color      DefaultTextColor       = Color.Black;
+        /// <summary>The default background color</summary>
+        public static readonly Color      DefaultBackgroundColor = Color.White;
+        //public static readonly Font       DefaultFont             = Form.DefaultFont;
+
+        /// <summary>The current settings</summary>
         protected Dictionary<string, object> settings = new Dictionary<string, object>
         {
             { "MaxWidth",           DefaultMaxWidth         },
@@ -514,7 +577,6 @@ namespace iTunesInfo
             XmlReaderSettings settings = new XmlReaderSettings();
             settings.CloseInput = true;
             settings.IgnoreComments = true;
-            //settings.IgnoreWhitespace = true;
 
             XmlReader reader = null;
             try
@@ -546,6 +608,10 @@ namespace iTunesInfo
             {
                 if (reader != null)
                     reader.Close();
+
+                // Check to make sure there is at least one event, otherwise use the defaults
+                if (this.Events.Count == 0 && this.KeyEvents.Count == 0)
+                    this.SetEventsToDefaults();
             }
         }
         
@@ -584,27 +650,35 @@ namespace iTunesInfo
                 xml.WriteElementString(setting.Key, text);
             }
             xml.WriteEndElement(); // Settings
-            xml.WriteElementString("Display", this.displayFormat);
             xml.WriteStartElement("Events");
             WriteEvents(xml, "Event", this.Events);
             WriteEvents(xml, "KeyEvent", this.KeyEvents);
             xml.WriteEndElement(); // Events
+            xml.WriteElementString("Display", this.displayFormat);
             xml.WriteEndElement(); // iTunesInfo
             xml.WriteEndDocument();
             xml.Close();
         }
         #endregion
 
+        #region Helpers for forms
+        /// <summary>Show and activate a form, making sure that the Invoke is called as necessary</summary>
+        /// <param name="f">The form to show and activate</param>
         private static void ShowForm(Form f)
         {
             if (f.InvokeRequired)
-                f.BeginInvoke(new Delegates.Action(f.Show));
+            {
+                f.Invoke(new Delegates.Action(f.Show));
+                f.BeginInvoke(new Delegates.Action(f.Activate));
+            }
             else
             {
                 f.Show();
                 f.Activate();
             }
         }
+        /// <summary>Close a form, making sure that the Invoke is called as necessary</summary>
+        /// <param name="f">The form to close</param>
         private static void CloseForm(Form f)
         {
             if (f.InvokeRequired)
@@ -612,6 +686,8 @@ namespace iTunesInfo
             else
                 f.Close();
         }
+        /// <summary>Invalidate an entire form, making sure that the Invoke is called as necessary</summary>
+        /// <param name="f">The form to invalidate</param>
         private static void InvalidateForm(Form f)
         {
             if (f.InvokeRequired)
@@ -619,6 +695,7 @@ namespace iTunesInfo
             else
                 f.Invalidate();
         }
+        #endregion
 
         #region Display Management
         private bool glassAllowed = true, usingGlass = false;
@@ -630,7 +707,7 @@ namespace iTunesInfo
             dis.InsideMargin = (int)this.settings["InsideMargin"];
             dis.OutsideMargin = (int)this.settings["OutsideMargin"];
             dis.MaxOpacity = (double)this.settings["MaxOpacity"];
-            dis.DefaultFadeTime = (int)this.settings["FadeTime"];
+            dis.FadeTime = (int)this.settings["FadeTime"];
             dis.VisibleTime = (int)this.settings["VisibleTime"];
             dis.DesktopPosition = (DesktopPos)this.settings["DesktopPosition"];
             dis.ForeColor = (Color)this.settings["TextColor"];
@@ -715,12 +792,16 @@ namespace iTunesInfo
         }
         #endregion
 
+        #region Options Dialog
+        /// <summary>The options dialog</summary>
         private Options options;
+        /// <summary>Creates the Options dialog</summary>
         private void CreateOptions()
         {
             this.options = new Options(this);
             IntPtr h = this.options.Handle; // required so that the handle is forcibly created so later we can easily show it from any thread
         }
+        /// <summary>Close the Options dialog and destroy it</summary>
         private void ShutdownOptions()
         {
             if (this.options != null)
@@ -729,6 +810,7 @@ namespace iTunesInfo
                 this.options = null;
             }
         }
+        #endregion
 
         #region iTunes Object
         private bool minimizeOnStart = false;
@@ -804,12 +886,6 @@ namespace iTunesInfo
         }
         #endregion
 
-        private void SetupKeyMonitorEvents()
-        {
-            KeyMonitor.KeyChange += new KeyEventHandler(OnKeyChanged);
-            KeyMonitor.Start();
-        }
-
         public Controller()
         {
             this.Icon = iTunesInfo.Properties.Resources.icon;
@@ -817,7 +893,8 @@ namespace iTunesInfo
             this.SetupITunes();
             this.CreateDisplay();
             this.CreateOptions();
-            this.SetupKeyMonitorEvents();
+            KeyMonitor.KeyChange += new KeyEventHandler(this.OnKeyChanged);
+            KeyMonitor.Start();
             this.UpdateInfo();
             this.dis.FadeIn();
         }
@@ -833,6 +910,8 @@ namespace iTunesInfo
             Application.Exit();
         }
 
+        /// <summary>Overridden to force the form to always be hidden</summary>
+        /// <param name="value">If the form is becoming visible</param>
         protected override void SetVisibleCore(bool value) { base.SetVisibleCore(false); }
 
         private void SetTrackRating(double x) // from 0 to 5, halves are allowed, but no other fractions
@@ -865,10 +944,7 @@ namespace iTunesInfo
         protected void UpdateInfo()
         {
             this.dis.Content = (this.itunes.CurrentTrack != null) ? Props.GetDisplayContent(this.itunes, this.displayFormat) : TrackDisplay.DefaultContent;
-            if (this.dis.InvokeRequired)
-                this.dis.Invoke(new Delegates.Action(this.dis.Invalidate));
-            else
-                this.dis.Invalidate();
+            InvalidateForm(dis);
         }
 
         #region Threadstartable Actions
