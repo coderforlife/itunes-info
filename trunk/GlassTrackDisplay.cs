@@ -139,7 +139,7 @@ namespace iTunesInfo
         #endregion
 
         /// <summary>The size of the glow effect behind items that are drawn on the glass</summary>
-        protected int glow_size = 8;
+        protected int glow_size = Controller.DefaultGlowSize;
         /// <summary>Get or set the size of the glow effect behind items that are drawn on the glass, setting causes the display to rebuild</summary>
         public int GlowSize { get { return glow_size; } set { glow_size = value; this.FireOnValueChanged(); } }
 
