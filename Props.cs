@@ -98,7 +98,7 @@ namespace iTunesInfo
         /// <returns>The value, possibly just repeating the previous value</returns>
         public double Value(Controller controller)
         {
-            if (!controller.iTunesDisabled)
+            if (!controller.iTunesDeferred)
                 this.last = this.ValueInternal;
             return this.last;
         }
